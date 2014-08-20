@@ -1,5 +1,6 @@
  #include <MenuSystem.h>
  #include <LiquidCrystal.h>
+ #include <Thread.h>
   
  #define MISSION_1
  
@@ -60,6 +61,8 @@
  void setupMenu();
  void displayMenu();
  void serialHandler();
+ void lineTracking();
+ void setupLineTracking();
  
  void optimizePath();
  void updatePath(char dir);
@@ -69,23 +72,45 @@
  void onMission2_StartSelected(MenuItem* item);
  void onMission3_StartSelected(MenuItem* item);
  
+ Thread controllerThread = Thread();
+ 
  void setup() {
    Serial.begin(9600);
+   myThread.onRun(serialHandler);
+   myThread.setInterval(100);
+   
    lcd.begin(16, 2);
+   
    setupMenu();
+   setupLineTracking();
    displayMenu();
  }
  
  void loop() {
-   serialHandler();
+   if(controllerThread.shouldRun())
+     controllerThread.run();
+   
+   displayMenu();  
  }
  
  
+ void lineTracking() {
+ 
+ }
+ 
+ void setupLineTracking() {
+   pinMode(sensorRight,INPUT);
+   pinMode(sensorLeft,INPUT);
+   pinMode(motorRight,OUTPUT);
+   pinMode(motorLeft,INPUT);
+ }
  
  void serialHandler() {
-   if (Serial.available() >= PACKET_SIZE) {
-     Serial.readBytes(packetBuffer, PACKET_SIZE);
-     packet = (PACKET*)packetBuffer;
+   while(1) {
+     if (Serial.available() >= PACKET_SIZE) {
+       Serial.readBytes(packetBuffer, PACKET_SIZE);
+       packet = (PACKET*)packetBuffer;
+     }
    }
  }
  
