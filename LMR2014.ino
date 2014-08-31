@@ -1,21 +1,22 @@
 #include <MenuSystem.h>
 #include <LiquidCrystal.h>  
 #include <SoftwareSerial.h>
+#include <Servo.h>
 
-#define MOTOR_UL_CW 20
-#define MOTOR_UL_CCW 21
+#define MOTOR_UL_CW 22
+#define MOTOR_UL_CCW 23
 #define MOTOR_UL_PWM 2
 
-#define MOTOR_UR_CW 22
-#define MOTOR_UR_CCW 23
+#define MOTOR_UR_CW 24
+#define MOTOR_UR_CCW 25
 #define MOTOR_UR_PWM 3
 
-#define MOTOR_DR_CW 24
-#define MOTOR_DR_CCW 25
+#define MOTOR_DR_CW 26
+#define MOTOR_DR_CCW 27
 #define MOTOR_DR_PWM 4
 
-#define MOTOR_DL_CW 26
-#define MOTOR_DL_CCW 27
+#define MOTOR_DL_CW 28
+#define MOTOR_DL_CCW 29
 #define MOTOR_DL_PWM 5
 
 #define MOTOR_ARM0 6
@@ -24,7 +25,8 @@
 #define MOTOR_ARM3 9
 #define MOTOR_ARM4 10
  
- int motorArm0, motorArm1, motorArm2, motorArm3;
+ int motorArm0, motorArm1, motorArm2, motorArm3, motorArm4;
+ Servo servoArm0, servoArm1, servoArm2, servoArm3, servoArm4;
  
 #define PI 3.14159265359
 
@@ -87,6 +89,7 @@
  double moveRadian, radianOffset = 0.0;
  
  bool trig0Pressed, trig1Pressed, trig2Pressed, trig3Pressed;
+ bool buttonupPressed, buttondownPressed;
 
  void setup() {
    Serial.begin(9600);
@@ -106,11 +109,16 @@
    pinMode(MOTOR_DR_CCW, OUTPUT);
    pinMode(MOTOR_DR_PWM, OUTPUT);
 
-   pinMode(MOTOR_ARM0, OUTPUT);
-   pinMode(MOTOR_ARM1, OUTPUT);
-   pinMode(MOTOR_ARM2, OUTPUT);
-   pinMode(MOTOR_ARM3, OUTPUT);
-   pinMode(MOTOR_ARM4, OUTPUT);
+   analogWrite(MOTOR_UR_PWM, 0);
+   analogWrite(MOTOR_UL_PWM, 0);
+   analogWrite(MOTOR_DR_PWM, 0);
+   analogWrite(MOTOR_DL_PWM, 0);
+
+   servoArm0.attach(MOTOR_ARM0);
+   servoArm1.attach(MOTOR_ARM1);
+   servoArm2.attach(MOTOR_ARM2);
+   servoArm3.attach(MOTOR_ARM3);
+   servoArm4.attach(MOTOR_ARM4);
 
    motorArm0 = motorArm1 = motorArm2 = motorArm3 = motorArm4 = 0;
    
@@ -119,6 +127,8 @@
  }
  
  void loop() {
+   //trig1Pressed = true;
+   //moveBase(100, 0);
    controllerHandler();
    delay(10);  
  }
@@ -136,16 +146,31 @@
    return radian - (3*PI/4) + radianOffset;
  }
  
+#define MAX(a,b) a>b?a:b
+ int tmpInt[2];
+ void normalize(int* motors)
+ {
+   tmpInt[0] = MAX(MAX(abs(motors[0]), abs(motors[1])), MAX(abs(motors[2]), abs(motors[3])));
+   tmpInt[0] = 255/tmpInt[0];
+   for(tmpInt[1]=0; tmpInt[1]<4; tmpInt[1]++)
+     motors[tmpInt[1]]*= tmpInt[0];
+ }
+ 
+ int baseMotorPWM[4];
  void moveBase(int x, int y) {
    if (!x && !y) {
      digitalWrite(MOTOR_UR_CW, LOW);
      digitalWrite(MOTOR_UR_CCW, LOW);
+     analogWrite(MOTOR_UR_PWM, 0);
      digitalWrite(MOTOR_UL_CW, LOW);
      digitalWrite(MOTOR_UL_CCW, LOW);
+     analogWrite(MOTOR_UL_PWM, 0);
      digitalWrite(MOTOR_DR_CW, LOW);
      digitalWrite(MOTOR_DR_CCW, LOW);
+     analogWrite(MOTOR_DR_PWM, 0);
      digitalWrite(MOTOR_DL_CW, LOW);
      digitalWrite(MOTOR_DL_CCW, LOW);
+     analogWrite(MOTOR_DL_PWM, 0);
      return;
    }
    
@@ -153,11 +178,11 @@
      moveRadian = atan2(-y, x);
      moveRadian = relativeRadian(moveRadian);
      
-     tmpPWM = (int)(cos(moveRadian) * 255);
-     analogWrite(MOTOR_UR_PWM, abs(tmpPWM));
-     Serial.println(tmpPWM);
+     baseMotorPWM[0] = (int)(cos(moveRadian) * 255);
+     //analogWrite(MOTOR_UR_PWM, abs(baseMotorPWM[0]));
+     Serial.println(baseMotorPWM[0]);
      
-     if (tmpPWM < 0) {
+     if (baseMotorPWM[0] < 0) {
        digitalWrite(MOTOR_UR_CW, LOW);
        digitalWrite(MOTOR_UR_CCW, HIGH);
      } else {
@@ -165,11 +190,11 @@
        digitalWrite(MOTOR_UR_CW, HIGH);
      }
           
-     tmpPWM = (int)(sin(moveRadian) * 255);
-     analogWrite(MOTOR_UL_PWM, abs(tmpPWM));
-     Serial.println(tmpPWM);
+     baseMotorPWM[1] = (int)(sin(moveRadian) * 255);
+     //analogWrite(MOTOR_UL_PWM, abs(baseMotorPWM[1]));
+     Serial.println(baseMotorPWM[1]);
      
-     if (tmpPWM < 0) {
+     if (baseMotorPWM[1] < 0) {
        digitalWrite(MOTOR_UL_CW, LOW);
        digitalWrite(MOTOR_UL_CCW, HIGH);
      } else {
@@ -177,11 +202,11 @@
        digitalWrite(MOTOR_UL_CW, HIGH);
      }
      
-     tmpPWM = (int)(- cos(moveRadian) * 255);
-     analogWrite(MOTOR_DL_PWM, abs(tmpPWM));
-     Serial.println(tmpPWM);
+     baseMotorPWM[2] = (int)(- cos(moveRadian) * 255);
+     //analogWrite(MOTOR_DL_PWM, abs(baseMotorPWM[2]));
+     Serial.println(baseMotorPWM[2]);
      
-     if (tmpPWM < 0) {
+     if (baseMotorPWM[2] < 0) {
        digitalWrite(MOTOR_DL_CW, LOW);
        digitalWrite(MOTOR_DL_CCW, HIGH);
      } else {
@@ -189,17 +214,24 @@
        digitalWrite(MOTOR_DL_CW, HIGH);
      }
      
-     tmpPWM = (int)(- sin(moveRadian) * 255);
-     analogWrite(MOTOR_DR_PWM, abs(tmpPWM));
-     Serial.println(tmpPWM);
+     baseMotorPWM[3] = (int)(- sin(moveRadian) * 255);
+     //analogWrite(MOTOR_DR_PWM, abs(baseMotorPWM[3]));
+     Serial.println(baseMotorPWM[3]);
      
-     if (tmpPWM < 0) {
+     if (baseMotorPWM[3] < 0) {
        digitalWrite(MOTOR_DR_CW, LOW);
        digitalWrite(MOTOR_DR_CCW, HIGH);
      } else {
        digitalWrite(MOTOR_DR_CCW, LOW);
        digitalWrite(MOTOR_DR_CW, HIGH);
      }
+     
+     normalize(baseMotorPWM);
+     analogWrite(MOTOR_UR_PWM, abs(baseMotorPWM[0]));
+     analogWrite(MOTOR_UL_PWM, abs(baseMotorPWM[1]));
+     analogWrite(MOTOR_DL_PWM, abs(baseMotorPWM[2]));
+     analogWrite(MOTOR_DR_PWM, abs(baseMotorPWM[3]));
+     
      
    } else {
      if (x > 0) {
@@ -236,13 +268,48 @@
    }
  }
 
+#define MOTOR_ARM_MOVEMENT 1
+
  void moveArm(int x, int y) {
+   //Serial.println(x);
+   //Serial.println(y);
    if (!trig0Pressed) {
+     if (x > 0)
+       motorArm0 = motorArm0+MOTOR_ARM_MOVEMENT>360 ? 360: motorArm0+MOTOR_ARM_MOVEMENT;
+     else if (x < 0)
+       motorArm0 = motorArm0-MOTOR_ARM_MOVEMENT<0 ? 0: motorArm0-MOTOR_ARM_MOVEMENT;
+     servoArm0.write(motorArm0);
      
-   }  
+     if (y < 0)
+       motorArm1 = motorArm1+MOTOR_ARM_MOVEMENT>180 ? 180: motorArm1+MOTOR_ARM_MOVEMENT;
+     else if (y > 0)
+       motorArm1 = motorArm1-MOTOR_ARM_MOVEMENT<0 ? 0: motorArm1-MOTOR_ARM_MOVEMENT;
+     servoArm1.write(motorArm1);
+   }
+   else {
+     if (buttonupPressed)
+       motorArm2 = motorArm2+MOTOR_ARM_MOVEMENT>180 ? 180: motorArm2+MOTOR_ARM_MOVEMENT;
+     else if (buttondownPressed)
+       motorArm2 = motorArm2-MOTOR_ARM_MOVEMENT<0 ? 0: motorArm2-MOTOR_ARM_MOVEMENT;
+     servoArm2.write(motorArm2); 
+ 
+     if (y > 0)
+       motorArm3 = motorArm3+MOTOR_ARM_MOVEMENT>180 ? 180: motorArm3+MOTOR_ARM_MOVEMENT;
+     else if (y < 0)
+       motorArm3 = motorArm3-MOTOR_ARM_MOVEMENT<0 ? 0: motorArm3-MOTOR_ARM_MOVEMENT;
+     Serial.println(motorArm3);
+     servoArm3.write(motorArm3);    
+
+     if (x > 0)
+       motorArm4 = motorArm4+MOTOR_ARM_MOVEMENT>180 ? 180: motorArm4+MOTOR_ARM_MOVEMENT;
+     else if (x < 0)
+       motorArm4 = motorArm4-MOTOR_ARM_MOVEMENT<0 ? 0: motorArm4-MOTOR_ARM_MOVEMENT;
+     servoArm4.write(motorArm4);     
+   }
  }
  
  void lineTracking() {
+   
  }
  
  void controllerHandler() {
@@ -254,6 +321,8 @@
      trig1Pressed = false;
      trig2Pressed = false;
      trig3Pressed = false;
+     buttonupPressed = false;
+     buttondownPressed = false;
      
      // trig0
      if (packet->flags & (1 << 0)) {
@@ -273,12 +342,14 @@
      }  
      // buttonup
      if (packet->flags & (1 << 4)) {
+       buttonupPressed = true;
        //Serial.println("up");
        //menuSystem.prev();
        //displayMenu();
      }     
      // buttondown
      if (packet->flags & (1 << 5)) {
+       buttondownPressed = true;
        //Serial.println("down");
        //menuSystem.next();
        //displayMenu();
@@ -369,4 +440,3 @@
        break;
      }
  }
-
