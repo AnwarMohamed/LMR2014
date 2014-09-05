@@ -27,6 +27,9 @@
  
  int motorArm0, motorArm1, motorArm2, motorArm3, motorArm4;
  Servo servoArm0, servoArm1, servoArm2, servoArm3, servoArm4;
+ int sensor[12]={A0,A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11};
+ int sensorWhite=650;
+ int sensorBlack=600;
  
 #define PI 3.14159265359
 
@@ -71,8 +74,9 @@
  void setupMenu();
  void displayMenu();
  void controllerHandler();
- void lineTracking();
- void setupLineTracking();
+
+ bool valuesIR[4][3];
+ //void lineTracking();
  
  void optimizePath();
  void updatePath(char dir);
@@ -83,7 +87,7 @@
  void onMission3_StartSelected(MenuItem* item);
  void onTests_1(MenuItem* item);
  
- void moveBase(int x, int y);
+ void moveBase(int x, int y, int z);
  void moveArm(int x, int y);
  int moveDegree, tmpDegree, tmpPWM;
  double moveRadian, radianOffset = 0.0;
@@ -148,16 +152,16 @@
  
 #define MAX(a,b) a>b?a:b
  int tmpInt[2];
- void normalize(int* motors)
+ void normalize(int* motors, int speed)
  {
    tmpInt[0] = MAX(MAX(abs(motors[0]), abs(motors[1])), MAX(abs(motors[2]), abs(motors[3])));
-   tmpInt[0] = 255/tmpInt[0];
+   tmpInt[0] = speed/tmpInt[0];
    for(tmpInt[1]=0; tmpInt[1]<4; tmpInt[1]++)
      motors[tmpInt[1]]*= tmpInt[0];
  }
  
  int baseMotorPWM[4];
- void moveBase(int x, int y) {
+ void moveBase(int x, int y, int speed) {
    if (!x && !y) {
      digitalWrite(MOTOR_UR_CW, LOW);
      digitalWrite(MOTOR_UR_CCW, LOW);
@@ -178,7 +182,7 @@
      moveRadian = atan2(-y, x);
      moveRadian = relativeRadian(moveRadian);
      
-     baseMotorPWM[0] = (int)(cos(moveRadian) * 255);
+     baseMotorPWM[0] = (int)(cos(moveRadian) * speed);
      //analogWrite(MOTOR_UR_PWM, abs(baseMotorPWM[0]));
      Serial.println(baseMotorPWM[0]);
      
@@ -190,7 +194,7 @@
        digitalWrite(MOTOR_UR_CW, HIGH);
      }
           
-     baseMotorPWM[1] = (int)(sin(moveRadian) * 255);
+     baseMotorPWM[1] = (int)(sin(moveRadian) * speed);
      //analogWrite(MOTOR_UL_PWM, abs(baseMotorPWM[1]));
      Serial.println(baseMotorPWM[1]);
      
@@ -202,7 +206,7 @@
        digitalWrite(MOTOR_UL_CW, HIGH);
      }
      
-     baseMotorPWM[2] = (int)(- cos(moveRadian) * 255);
+     baseMotorPWM[2] = (int)(- cos(moveRadian) * speed);
      //analogWrite(MOTOR_DL_PWM, abs(baseMotorPWM[2]));
      Serial.println(baseMotorPWM[2]);
      
@@ -214,7 +218,7 @@
        digitalWrite(MOTOR_DL_CW, HIGH);
      }
      
-     baseMotorPWM[3] = (int)(- sin(moveRadian) * 255);
+     baseMotorPWM[3] = (int)(- sin(moveRadian) * speed);
      //analogWrite(MOTOR_DR_PWM, abs(baseMotorPWM[3]));
      Serial.println(baseMotorPWM[3]);
      
@@ -226,7 +230,7 @@
        digitalWrite(MOTOR_DR_CW, HIGH);
      }
      
-     normalize(baseMotorPWM);
+     normalize(baseMotorPWM, speed);
      analogWrite(MOTOR_UR_PWM, abs(baseMotorPWM[0]));
      analogWrite(MOTOR_UL_PWM, abs(baseMotorPWM[1]));
      analogWrite(MOTOR_DL_PWM, abs(baseMotorPWM[2]));
@@ -308,8 +312,8 @@
    }
  }
  
+ int x, y;
  void lineTracking() {
-   
  }
  
  void controllerHandler() {
@@ -392,7 +396,7 @@
      moveArm(packet->leftx, packet->lefty);
      
      // right analog
-     moveBase(packet->rightx, packet->righty);
+     moveBase(packet->rightx, packet->righty, 255);
      
    }
  }
@@ -422,7 +426,180 @@
  }
  
  void onTests_1(MenuItem* item) {};
- void onMission1_StartSelected(MenuItem* item) {};
+ void onMission1_StartSelected(MenuItem* item) {
+ 
+  //Track North
+  //  Sensors : 4,6
+  //  Stop    : count by sensors 2,8 = 0,0
+  while(analogRead(sensor[1])<sensorBlack && analogRead(sensor[7])<sensorBlack)
+  {
+    if(analogRead(sensor[3])>sensorWhite && analogRead(sensor[5]>sensorWhite))
+    {
+      //North
+      moveBase(0, 100, 255);
+    }
+    else if(analogRead(sensor[3])<sensorBlack)
+    {
+      //North West
+      moveBase(-100, 100, 255);
+    }
+    else if(analogRead(sensor[5])<sensorBlack)
+    {
+      //North East
+      moveBase(100, 100, 255);
+    }
+  }
+  
+  //Diagonal NorthEast : when sensor 1 =1
+  //South  :  when sensor 1=0
+  //Stop   :  sensor 5 =0
+  //Arm move to get box 1
+  while(analogRead(sensor[4])<sensorBlack)
+  {
+    if(analogRead(sensor[0])>sensorWhite)
+    {
+      //North East
+      moveBase(100, 100, 255);
+    }
+    else if(analogRead(sensor[0])<sensorBlack)
+    {
+      //South
+      moveBase(0, -100, 255);
+    }
+  }
+  delay(3000);
+  
+  //South West  :  when sensor 1=0 
+  //North  :  when sensor 1=1
+  //Stop   :  count by sensors 5,11=0,0
+  while(analogRead(sensor[4])<sensorBlack && analogRead(sensor[10])<sensorBlack)
+  {
+    if(analogRead(sensor[0])>sensorWhite)
+    {
+      //South West
+      moveBase(100, -100, 255);
+    }
+    else if(analogRead(sensor[0])<sensorBlack)
+    {
+      //North
+      moveBase(0, 100, 255);
+    }
+  }
+  
+  //North West  :  when sensor 9=1
+  //South    :  when sensor 9=0
+  //Stop     :  sensor 5=0
+  //Arm move to get box 2
+  while(analogRead(sensor[4])<sensorBlack)
+  {
+    if(analogRead(sensor[0])>sensorWhite)
+    {
+      //North East
+      moveBase(100, 100, 255);
+    }
+    else if(analogRead(sensor[0])<sensorBlack)
+    {
+      //South
+      moveBase(0, -100, 255);
+    }
+  }
+  delay(3000);
+  
+  //Track North
+  //  Sensors :  4,6
+  //  SpecialCase : sensors 5,6,7 = 1,1,1 ----> North
+  //  Stop    :  sensor 3,7=0,0
+  //  Arm move to get box 3
+  while(analogRead(sensor[2])<sensorBlack&&analogRead(sensor[6])<sensorBlack)
+  {
+    if(analogRead(sensor[3])>sensorWhite&&analogRead(sensor[5]>sensorWhite))
+    {
+      //North
+      moveBase(0, 100, 255);
+    }
+    else if(analogRead(sensor[3])<sensorBlack)
+    {
+      //North West
+      moveBase(-100, 100, 255);
+    }
+    else if(analogRead(sensor[5])<sensorBlack)
+    {
+      //North East
+      moveBase(100, 100, 255);
+    }
+    else if(analogRead(sensor[4])<sensorBlack&&analogRead(sensor[5])<sensorBlack&&analogRead(sensor[6])<sensorBlack)
+    {
+      //North
+      moveBase(0, 100, 255);
+    }
+  }
+  delay(3000);
+  
+  //North East  :  when sensor 6=1
+  //South  :  sensor 6=0
+  //Stop   :  sensor 5,11=0,0
+  while(analogRead(sensor[4])<sensorBlack&&analogRead(sensor[10])<sensorBlack)
+  {
+    if(analogRead(sensor[5])<sensorBlack)
+    {
+      //North East
+      moveBase(100, 100, 255);
+    }
+    else if(analogRead(sensor[5]<sensorBlack))
+    {
+      //South
+      moveBase(0, -100, 255);
+    }
+  }
+  
+  //Track North
+  //  Sensors  :  4,6
+  //  Stop     :  sensor 9,1=0,0
+  //Arm move to put 3 boxes
+  while(analogRead(sensor[8])<sensorBlack&&analogRead(sensor[0])<sensorBlack)
+  {
+    if(analogRead(sensor[3])>sensorWhite&&analogRead(sensor[5]>sensorWhite))
+    {
+      //North
+      moveBase(0, 100, 255);
+    }
+    else if(analogRead(sensor[3])<sensorBlack)
+    {
+      //South East
+      moveBase(-100, 100, 255);
+    }
+    else if(analogRead(sensor[5])<sensorBlack)
+    {
+      //North East
+      moveBase(100, 100, 255);
+    }
+  }
+  delay(5000);
+  
+  //South East  :  when sensor 1=0
+  //North  :  when sensor 1=1
+  //Stop   :  sensor 11=0
+  //Arm move to get balls
+  
+  
+  //North West  :  when sensor 6=0
+  //South  :  when sensor 6=1
+  //Stop   :  sensor 5,11=0,0
+  
+  
+  //Track South
+  //  Sensors  :  10,12
+  //  Stop     :  sensors 2,8=0,0 after 2 times count
+
+
+  //Turn Round  "Clockwise Direction"
+  //  Sensor :  11
+  //  Stop   :  after 2 counts
+
+  
+  //Shoot
+ }
+ 
  void onMission2_ScanSelected(MenuItem* item) {};
  void onMission2_SolveSelected(MenuItem* item) {};
  void onMission3_StartSelected(MenuItem* item) {};
